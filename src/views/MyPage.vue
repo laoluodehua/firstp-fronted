@@ -31,7 +31,7 @@
 
       <div class="selected-amount">
         <h3>
-          应付金额:
+          支付金额:
           {{ selectedAmount || customAmount }} &nbsp;&nbsp;&nbsp;&nbsp;元
         </h3>
       </div>
