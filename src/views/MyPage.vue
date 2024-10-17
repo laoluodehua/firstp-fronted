@@ -10,9 +10,12 @@
           v-model="customAmount"
           placeholder="请输入自定义金额"
           @input="updateSelectedAmount"
+          @focus="clearSelectedAmount"
           @blur="validateCustomAmount"
         />
-        <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+        <div v-if="amountErrorMessage" class="error-message">
+          {{ amountErrorMessage }}
+        </div>
         <!-- 错误提示信息 -->
       </div>
 
@@ -24,6 +27,7 @@
           v-for="price in priceMapping"
           :key="price.price"
           @click="setPrice(price.price)"
+          :class="{ active: selectedAmount === price.price }"
         >
           <div class="price">¥ {{ price.price }}</div>
         </div>
@@ -36,19 +40,33 @@
         </h3>
       </div>
 
-      <button class="charge-button" @click="initiateCharge">立即支付</button>
+      <!-- 移动错误信息到这里 -->
+
+      <button
+        class="charge-button"
+        @click="initiateCharge"
+        :disabled="isCharging"
+      >
+        {{ isCharging ? "处理中..." : "立即支付" }}
+      </button>
+      <div class="error-message" v-if="paymentErrorMessage">
+        {{ paymentErrorMessage }}
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import axios from "axios"
+import { v4 as uuidv4 } from "uuid"
 export default {
   name: "MyPage",
   data() {
     return {
       customAmount: null,
       selectedAmount: 0,
-      errorMessage: "", // 确保 errorMessage 在 data 中初始化
+      amountErrorMessage: "", // 用于金额验证的错误信息
+      paymentErrorMessage: "", // 用于支付失败的错误信息
       priceMapping: [
         { price: 300.0 },
         { price: 500.0 },
@@ -56,6 +74,7 @@ export default {
         { price: 2000.0 },
         { price: 3000.0 },
       ],
+      isCharging: false, // 新增属性，用于禁用按钮
     }
   },
   computed: {
@@ -68,50 +87,114 @@ export default {
   methods: {
     setPrice(price) {
       this.selectedAmount = price
-      this.errorMessage = "" // 清除错误信息
+      this.customAmount = null // 重置自定义金额为 null，这样输入框恢复到默认占位符
+      this.amountErrorMessage = "" // 清除金额错误信息
+      this.paymentErrorMessage = "" // 清除支付错误信息
+    },
+
+    generateOrderId() {
+      // 获取当前日期和时间
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, "0") // 月份从0开始，所以+1
+      const day = String(now.getDate()).padStart(2, "0")
+      const hour = String(now.getHours()).padStart(2, "0")
+      const minute = String(now.getMinutes()).padStart(2, "0")
+      const second = String(now.getSeconds()).padStart(2, "0")
+
+      // 生成6位随机字母
+      const randomLetters = Array(6)
+        .fill(null)
+        .map(() => {
+          const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+          return letters.charAt(Math.floor(Math.random() * letters.length))
+        })
+        .join("")
+
+      // 拼接日期时间和随机字母生成orderId
+      const orderId = `${year}${month}${day}${hour}${minute}${second}${randomLetters}`
+      return orderId
+    },
+
+    clearSelectedAmount() {
+      this.selectedAmount = 0 // 清除固定金额的选中状态
+      this.amountErrorMessage = "" // 清除金额错误信息
+      this.paymentErrorMessage = "" // 清除支付错误信息
     },
     validateCustomAmount() {
+      // 检查是否选择了固定金额
+      if (this.selectedAmount) {
+        return // 如果选择了固定金额，直接返回，不进行自定义金额的验证
+      }
+
       const customAmountNumber = parseFloat(this.customAmount)
 
       // 检查金额是否为空或小于 300
       if (isNaN(customAmountNumber) || customAmountNumber < 300) {
-        this.errorMessage = "金额必须大于等于 300 元"
+        this.amountErrorMessage = "金额必须大于等于 300 元"
       } else {
-        this.errorMessage = "" // 清除错误信息
+        this.amountErrorMessage = "" // 清除错误信息
         this.selectedAmount = 0 // 确保自定义金额优先于选择金额
       }
+      this.paymentErrorMessage = "" // 清除支付错误信息
     },
     async initiateCharge() {
       // 确保这里有 async 关键字
       this.validateCustomAmount()
 
-      if (this.errorMessage) {
+      if (this.amountErrorMessage) {
         return
       }
+      // 将 isCharging 设置为 true
+      this.isCharging = true
+
+      // 设置定时器，10秒后恢复按钮状态
+      setTimeout(() => {
+        this.isCharging = false
+      }, 10000)
 
       const paymentData = {
-        amount: this.validAmount,
+        order_id: this.generateOrderId(),
+        price: this.validAmount,
       }
+      console.log(paymentData)
+      this.isButtonDisabled = true // 禁用按钮
 
       try {
-        const response = await fetch("/api/pay", {
-          // 在 async 函数中可以使用 await
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(paymentData),
-        })
+        const response = await axios.post(
+          "/api/testapp/create_payment/",
+          paymentData,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        )
 
-        if (!response.ok) {
-          throw new Error("网络错误，无法处理支付请求")
-        }
-
-        const result = await response.json()
+        const result = response.data // 获取返回的 JSON 数据
         console.log(result)
+        if (result.success) {
+          //
+          this.$router.push("/home/qrcode")
+        } else {
+          // 如果支付没有成功，可以设置错误消息
+          this.paymentErrorMessage = "支付失败，请重试"
+        }
       } catch (error) {
-        console.error("支付失败:", error)
-        this.errorMessage = "支付失败，请重试"
+        console.error(
+          "支付失败:",
+          error.response ? error.response.data : error.message
+        )
+        if (error.response && error.response.data) {
+          // 根据 API 返回的具体错误信息设置错误提示
+          this.paymentErrorMessage =
+            error.response.data.message || "支付失败，请重试"
+        } else {
+          this.paymentErrorMessage = "支付失败，请重试"
+        }
+      } finally {
+        // 在 finally 中确保无论如何都恢复按钮状态
+        this.isCharging = false
       }
     },
   },
@@ -130,6 +213,7 @@ export default {
   align-items: center; /* 垂直居中内容 */
   overflow: hidden; /* 隐藏滚动条 */
   opacity: 0.8; /* 可选：添加透明度使内容更易于阅读 */
+  background-color: rgba(255, 255, 255, 0.8); /* 背景颜色透明，不影响内容 */
 }
 
 .my-page {
@@ -177,6 +261,14 @@ export default {
   margin-bottom: 20px;
 }
 
+/* 当固定金额被选中时，保持背景颜色和文本颜色 */
+.amount-card.active {
+  background-color: green; /* 可以根据需要修改为你想要的颜色 */
+  color: white;
+  transform: scale(1.05); /* 点击后稍微放大，增加视觉反馈 */
+}
+
+/* 默认情况下的金额框样式 */
 .amount-card {
   border: 1px solid #ccc;
   border-radius: 8px;
@@ -187,10 +279,14 @@ export default {
   width: 150px;
 }
 
+/* 鼠标悬停时的背景变化，但不影响选中状态 */
 .amount-card:hover {
-  transform: scale(1.05);
-  background-color: red; /* 鼠标悬停时背景变为绿色 */
-  color: white; /* 可选：悬停时文字变为白色，便于阅读 */
+  background-color: #f41212; /* 鼠标悬停时的背景色 */
+}
+
+/* 避免在选中状态下鼠标悬停的颜色变化 */
+.amount-card.active:hover {
+  background-color: green; /* 确保选中时鼠标悬停也保持绿色 */
 }
 
 .price {
@@ -227,8 +323,9 @@ export default {
 }
 
 .error-message {
-  color: red;
-  font-size: 14px;
-  margin-top: 5px;
+  color: red; /* 错误消息的颜色 */
+  font-weight: bold; /* 加粗错误消息 */
+  margin-left: 10px; /* 按钮和错误消息之间的间距 */
+  display: inline; /* 确保是内联显示 */
 }
 </style>
