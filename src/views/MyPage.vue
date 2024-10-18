@@ -151,7 +151,7 @@ export default {
       // 设置定时器，10秒后恢复按钮状态
       setTimeout(() => {
         this.isCharging = false
-      }, 10000)
+      }, 15000)
 
       const paymentData = {
         order_id: this.generateOrderId(),
@@ -170,12 +170,26 @@ export default {
             },
           }
         )
-
         const result = response.data // 获取返回的 JSON 数据
         console.log(result)
         if (result.success) {
-          //
-          this.$router.push("/home/qrcode")
+          // 触发事件，传递 amount 和 order_id 给父组件
+          this.$emit("payment-success", {
+            amount: paymentData.price,
+            orderId: paymentData.order_id,
+          })
+          console.log("111")
+          // 这里设置 showQrCode 的值，确保只有在支付成功时才显示 QrCode 组件
+          // this.showQrCode = true // 仅在支付成功后设置 showQrCode
+          // this.$router.push({
+          //   path: "/home/qrcode",
+          //   query: { orderId: paymentData.order_id, amount: paymentData.price },
+          // })
+          // 延迟路由跳转，确保事件处理完毕
+          // setTimeout(() => {
+          //   this.$router.push("/home/qrcode")
+          // }, 1000)
+          // console.log("111")
         } else {
           // 如果支付没有成功，可以设置错误消息
           this.paymentErrorMessage = "支付失败，请重试"

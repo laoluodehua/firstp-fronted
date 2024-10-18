@@ -9,6 +9,11 @@
         class="qr-code-image"
         @error="handleImageError"
       />
+      <!-- 只有图片加载成功时才显示金额和订单号 -->
+      <div v-if="!imageLoadError">
+        <p>支付金额: ¥ {{ amount }}</p>
+        <p>订单号: {{ orderId }}</p>
+      </div>
       <p v-if="imageLoadError" class="error-message">二维码加载失败</p>
       <!-- 加载失败时显示提示 -->
 
@@ -22,18 +27,34 @@
 export default {
   data() {
     return {
-      // 替换为您二维码的真实 URL
       qrCodeUrl: "/public/images/20241017181147yHpclW.png",
-      imageLoadError: false, // 追踪图片加载错误的状态
+      imageLoadError: false,
     }
   },
+  props: {
+    amount: {
+      type: Number,
+      required: true,
+    },
+    orderId: {
+      type: String,
+      required: true,
+    },
+  },
+
+  // mounted() {
+  //   const { orderId, amount } = this.$route.query
+  //   this.orderId = orderId // 保存订单号
+  //   this.amount = amount // 保存支付金额
+  //   console.log("Received query params:", { orderId, amount })
+  // },
   methods: {
     handleImageError() {
       this.imageLoadError = true // 设置图片加载错误状态
     },
     goBack() {
       // 返回支付页面的逻辑
-      this.$router.push({ name: "MyPage" }) // 假设支付页面的路由名称为 PaymentPage
+      this.$emit("back-to-payment") // 通知父组件返回支付页面
     },
   },
 }
@@ -96,6 +117,12 @@ export default {
   border-radius: 5px; /* 设置圆角 */
   cursor: pointer; /* 设置鼠标指针为手型 */
   transition: background-color 0.3s; /* 添加过渡效果 */
+}
+
+p {
+  margin: 5px 0; /* 减少段落间距 */
+  font-size: 14px; /* 设置较小的字体 */
+  color: #555; /* 设置文本颜色为灰色 */
 }
 
 .back-button:hover {
